@@ -1,14 +1,6 @@
-import torch
-import os
 import numpy as np
-import torch.nn.functional as F
-import joblib
-import multiprocessing
-import pydensecrf.densecrf as dcrf
-import pydensecrf.utils as utils
 import cv2
-from PIL import Image
-import argparse
+
 
 
 def generate_heatmap(image_path, cam_path, heatmap_save_dir):
@@ -32,12 +24,6 @@ def generate_heatmap(image_path, cam_path, heatmap_save_dir):
 
     # 将CAM转换为热图
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET).astype(np.float32)
-
-    # 转换热图的颜色空间，从BGR到RGB
-    # heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB).astype(np.float32)  # 转换为浮点型
-
-    # 将原始图像从BGR转换为RGB
-    # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     # 叠加热图和原始图片
     overlay = cv2.addWeighted(image, 0.5, heatmap, 0.5, 0)

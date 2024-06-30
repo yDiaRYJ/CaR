@@ -1,13 +1,13 @@
 # -*- coding:UTF-8 -*-
 # 导入必要的库
-from pytorch_grad_cam import GradCAM
-from pytorch_grad_cam.utils.image import scale_cam_image
+from clip_es.pytorch_grad_cam import GradCAM
+from clip_es.pytorch_grad_cam.utils.image import scale_cam_image
 import torch
 from PIL import Image
 import numpy as np
 import cv2
 import os
-import clip
+from clip_es import clip
 from utils import scoremap2bbox
 from clip_text import BACKGROUND_CATEGORY_COCO
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize

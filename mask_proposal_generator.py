@@ -2,9 +2,9 @@ from generate_cam import generate_cam, zeroshot_classifier, reshape_transform, i
 from generate_pseudo_mask import crf
 from generate_heatmap import generate_heatmap
 from visual_prompting import blur_background
-from pytorch_grad_cam import GradCAM
+from clip_es.pytorch_grad_cam import GradCAM
 import torch
-import clip
+from clip_es import clip
 import os
 from clip_text import BACKGROUND_CATEGORY_COCO
 

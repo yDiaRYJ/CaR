@@ -118,7 +118,7 @@ def crf(image_path, cam_path, pseudo_mask_save_path):
 
     :param image_path: 图片路径
     :param cam_path: cam文件路径
-    :param pseudo_mask_save_path: 掩码保存文件夹路径
+    :param pseudo_mask_save_path: 掩码保存文件路径
     """
     # 配置
     torch.set_grad_enabled(False)
@@ -151,7 +151,7 @@ def crf(image_path, cam_path, pseudo_mask_save_path):
     label = np.argmax(prob, axis=0)  # 预测标签
     confidence = np.max(prob, axis=0)
     label[confidence < 0.95] = 255  # 低置信度区域设为255
-    cv2.imwrite(os.path.join(pseudo_mask_save_path, image_name + '.png'), label.astype(np.uint8))  # 保存伪标签
+    cv2.imwrite(pseudo_mask_save_path, label.astype(np.uint8))  # 保存伪标签
 
     return 0
 

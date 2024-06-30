@@ -1,16 +1,16 @@
 # -*- coding:UTF-8 -*-
 # 导入必要的库
 from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.image import scale_cam_image
 import torch
-import clip
 from PIL import Image
 import numpy as np
 import cv2
 import os
-from pytorch_grad_cam.utils.image import scale_cam_image
+import clip
 from utils import scoremap2bbox
-from clip_text import class_names, new_class_names_coco, BACKGROUND_CATEGORY_COCO
-from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize, RandomHorizontalFlip
+from clip_text import BACKGROUND_CATEGORY_COCO
+from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
 try:
     from torchvision.transforms import InterpolationMode
@@ -134,49 +134,66 @@ def img_ms_and_flip(img_path, ori_height, ori_width, scales=[1.0], patch_size=16
     return all_imgs  # 返回处理后的图像列表
 
 
-def generate_cam(img_path, cam_out_dir, model, label_list, bg_text_features, cam):
-    """
-    检测单张图片，执行CAM生成任务。
-
-    :param img_path: 图片路径
-    :param cam_out_dir: 输出cam文件路径
-    :param model: CLIP模型
-    :param label_list: 该图片的前景文本列表
-    :param bg_text_features: 背景文本特征
-    :param cam: CAM生成器
-    """
-    model = model.to(device)  # 将模型移动到对应设备上
-    bg_text_features = bg_text_features.to(device)  # 将背景文本特征移动到对应设备上
-    fg_text_features = zeroshot_classifier(label_list, ['a clean origami {}.'], model)  # 获取前景文本特征
-    fg_text_features = fg_text_features.to(device)  # 将前景文本特征移动到对应设备上
-
+def image_preprocess(img_path, model):
     ori_image = Image.open(img_path)  # 打开图像
     ori_height, ori_width = np.asarray(ori_image).shape[:2]  # 获取图像的原始高度和宽度
 
     ms_imgs = img_ms_and_flip(img_path, ori_height, ori_width, scales=[1.0])  # 获取多尺度图像
     ms_imgs = [ms_imgs[0]]  # 只使用第一个尺度的图像
-
-    highres_cam_all_scales = []
-    refined_cam_all_scales = []
-
     # 获取识别的图片
     image = ms_imgs[0]
     image = image.unsqueeze(0)  # 添加批次维度
     h, w = image.shape[-2], image.shape[-1]  # 获取图像的高度和宽度
     image = image.to(device)  # 将图像移动到对应设备上
     image_features, attn_weight_list = model.encode_image(image, h, w)  # 编码图像，获取图像特征和注意力权重
+    image_info = {
+        "image_features": image_features,
+        "attn_weight_list": attn_weight_list,
+        "h": h,
+        "w": w,
+        "ori_height": ori_height,
+        "ori_width": ori_width
+    }
+    return image_info
 
-    highres_cam_to_save = []
-    refined_cam_to_save = []
+def generate_cam(image_info, cam_out_dir, model, label_list, bg_text_features, cam):
+    """
+    检测单张图片和对应所有标签，执行CAM生成任务。
 
-    bg_features_temp = bg_text_features.to(device)  # 将背景特征移动到对应设备上
-    fg_features_temp = fg_text_features.to(device)  # 获取前景特征并移动到对应设备上
-    text_features_temp = torch.cat([fg_features_temp, bg_features_temp], dim=0)  # 合并前景和背景特征
-    input_tensor = [image_features, text_features_temp.to(device), h, w]  # 构建输入张量
+    :param image_info: 图片信息，由image_preprocess(img_path, model)获得
+    :param cam_out_dir: 输出cam文件的文件夹
+    :param model: CLIP模型
+    :param label_list: 该图片的前景文本列表
+    :param bg_text_features: 背景文本特征
+    :param cam: CAM生成器
+    """
+    # 获取图片信息
+    image_features = image_info["image_features"]
+    attn_weight_list = image_info["attn_weight_list"]
+    h = image_info["h"]
+    w = image_info["w"]
+    ori_height = image_info["ori_height"]
+    ori_width = image_info["ori_width"]
+    # 处理文本信息
+    fg_text_features = zeroshot_classifier(label_list, ['a clean origami {}.'], model)  # 获取前景文本特征
+    fg_text_features = fg_text_features.to(device)  # 将前景文本特征移动到对应设备上
 
+
+
+    text_features = torch.cat([fg_text_features, bg_text_features], dim=0).to(device)  # 合并前景和背景特征
+    input_tensor = [image_features, text_features, h, w]  # 构建输入张量
+
+    # 保存所有标签对应的cam
+    highres_cam_all_scales = []
+    refined_cam_all_scales = []
+
+    # 遍历标签
     for idx, label in enumerate(label_list):
-        targets = [ClipOutputTarget(label_list.index(label))]  # 设置目标
-
+        # 保存当前标签对应的cam
+        highres_cam_to_save = []
+        refined_cam_to_save = []
+        # 设置当前目标
+        targets = [ClipOutputTarget(label_list.index(label))]
         # 生成CAM
         grayscale_cam, logits_per_image, attn_weight_last = cam(input_tensor=input_tensor,
                                                                 targets=targets,
@@ -228,22 +245,22 @@ def generate_cam(img_path, cam_out_dir, model, label_list, bg_text_features, cam
         highres_cam_all_scales.append(torch.stack(highres_cam_to_save, dim=0))  # 保存高分辨率的CAM
         refined_cam_all_scales.append(torch.stack(refined_cam_to_save, dim=0))  # 保存细化后的CAM
 
-    highres_cam_all_scales = highres_cam_all_scales[0]
-    refined_cam_all_scales = refined_cam_all_scales[0]
-    attn_highres = refined_cam_all_scales.cpu().numpy().astype(np.float16)
-
     # 保存CAM结果到文件
-    img_name = img_path.split("/")[-1]
-    np.save(os.path.join(cam_out_dir, img_name.replace('jpg', 'npy')),
-            { "attn_highres": attn_highres,
-             })
-    return attn_highres  # 返回attn_highres
+    for idx, label in enumerate(label_list):
+        refined_cam_scales = refined_cam_all_scales[idx]
+        attn_highres = refined_cam_scales.cpu().numpy().astype(np.float16)
+
+        cam_out_path = cam_out_dir + "/" + label + ".npy"
+        np.save(cam_out_path,
+                { "attn_highres": attn_highres,
+                 })
+    return 0  # 返回attn_highres
 
 
 if __name__ == "__main__":
     model_path = 'resources/models/ViT-B-16.pt'
     image_path = 'resources/input/image/1.jpg'
-    cam_out_dir = 'resources/output/cam'
+    cam_out_dir = 'resources/output/cam/1.npy'
     model, _ = clip.load(model_path, device=device)  # 加载CLIP模型
     bg_text_features = zeroshot_classifier(BACKGROUND_CATEGORY_COCO, ['a clean origami {}.'], model)  # 获取背景文本特征
     if not os.path.exists(cam_out_dir):
@@ -251,4 +268,4 @@ if __name__ == "__main__":
     target_layers = [model.visual.transformer.resblocks[-1].ln_1]  # 设置目标层
     cam = GradCAM(model=model, target_layers=target_layers, reshape_transform=reshape_transform)  # 创建GradCAM对象
     label_list = ["tree"]
-    generate_cam(img_path=image_path, cam_out_dir=cam_out_dir, model=model, label_list=label_list, bg_text_features=bg_text_features, cam=cam)
+    generate_cam(img_path=image_path, cam_out_path=cam_out_dir, model=model, label_list=label_list, bg_text_features=bg_text_features, cam=cam)

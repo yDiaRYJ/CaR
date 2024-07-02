@@ -156,7 +156,7 @@ def image_preprocess(img_path, model):
     }
     return image_info
 
-def generate_cam(image_info, cam_out_dir, model, label_list, bg_text_features, cam):
+def generate_cam(image_info, cam_out_dir, model, label_list, bg_text_features, cam, save=False):
     """
     检测单张图片和对应所有标签，执行CAM生成任务。
 
@@ -166,6 +166,7 @@ def generate_cam(image_info, cam_out_dir, model, label_list, bg_text_features, c
     :param label_list: 该图片的前景文本列表
     :param bg_text_features: 背景文本特征
     :param cam: CAM生成器
+    :param save: 是否保存cam.npy文件
     """
     # 获取图片信息
     image_features = image_info["image_features"]
@@ -246,15 +247,19 @@ def generate_cam(image_info, cam_out_dir, model, label_list, bg_text_features, c
         refined_cam_all_scales.append(torch.stack(refined_cam_to_save, dim=0))  # 保存细化后的CAM
 
     # 保存CAM结果到文件
+    cam_dic_list = []
     for idx, label in enumerate(label_list):
         refined_cam_scales = refined_cam_all_scales[idx]
         attn_highres = refined_cam_scales.cpu().numpy().astype(np.float16)
-
-        cam_out_path = cam_out_dir + "/" + label + ".npy"
-        np.save(cam_out_path,
-                { "attn_highres": attn_highres,
-                 })
-    return 0  # 返回attn_highres
+        cam_dic = {
+            "attn_highres": attn_highres
+        }
+        cam_dic_list.append(cam_dic)
+    if save:
+        for idx, cam_dic in enumerate(cam_dic_list):
+            cam_out_path = cam_out_dir + "/" + label_list[idx] + ".npy"
+            np.save(cam_out_path, cam_dic)
+    return cam_dic_list  # 返回attn_highres
 
 
 if __name__ == "__main__":

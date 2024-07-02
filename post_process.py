@@ -9,6 +9,7 @@ import pydensecrf.utils as utils
 import cv2
 from PIL import Image
 import argparse
+from generate_heatmap import generate_heatmap
 
 mean_bgr = (104.008, 116.669, 122.675)
 
@@ -112,13 +113,14 @@ def scores(label_trues, label_preds, n_class):
     }
 
 
-def crf(image_path, cam_path, pseudo_mask_save_path):
+def crf(image_path, cam_dic, pseudo_mask_save_path='', save=False):
     """
     对生成的cam进行CRF后处理，并生成分割图
 
     :param image_path: 图片路径
-    :param cam_path: cam文件路径
+    :param cam_dic: cam字典
     :param pseudo_mask_save_path: 掩码保存文件路径
+    :param save: 是否保存掩码文件
     """
     # 配置
     torch.set_grad_enabled(False)
@@ -134,13 +136,11 @@ def crf(image_path, cam_path, pseudo_mask_save_path):
     )
 
     # process
-    image_name = image_path.split("/")[-1].split(".")[0]
     image = cv2.imread(image_path, cv2.IMREAD_COLOR).astype(np.float32)  # 读取图像
     image -= mean_bgr  # 均值减法
     image = image.transpose(2, 0, 1)  # HWC -> CHW
 
-    cam_dict = np.load(cam_path, allow_pickle=True).item()  # 读取cam字典
-    cams = cam_dict['attn_highres']
+    cams = cam_dic['attn_highres']
     bg_score = np.power(1 - np.max(cams, axis=0, keepdims=True), 1)  # 计算背景分数
     cams = np.concatenate((bg_score, cams), axis=0)
     prob = cams
@@ -151,10 +151,26 @@ def crf(image_path, cam_path, pseudo_mask_save_path):
     label = np.argmax(prob, axis=0)  # 预测标签
     confidence = np.max(prob, axis=0)
     label[confidence < 0.95] = 255  # 低置信度区域设为255
-    cv2.imwrite(pseudo_mask_save_path, label.astype(np.uint8))  # 保存伪标签
+    pseudo_mask = label.astype(np.uint8)
+    if save:
+        cv2.imwrite(pseudo_mask_save_path, pseudo_mask)  # 保存伪标签
+    return pseudo_mask
 
-    return 0
 
+def post_process(image_path, cam_dics, pseudo_mask_save_path='', save=False):
+    final_cam = None
+    for cam_dic in cam_dics:
+        cam = cam_dic['attn_highres']
+        if final_cam is None:
+            final_cam = cam.copy()
+        else:
+            final_cam = np.maximum(final_cam, cam)
+    final_cam_dic = {
+        'attn_highres': final_cam
+    }
+    final_heatmap = generate_heatmap(image_path=image_path, cam_dic=final_cam_dic, save=save)
+    final_mask = crf(image_path=image_path, cam_dic=final_cam_dic, save=save)
+    return final_heatmap, final_mask
 
 if __name__ == "__main__":
     pseudo_mask_save_path = "resources/output/pseudo_mask"

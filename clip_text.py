@@ -56,3 +56,17 @@ new_class_names_coco = ['person with clothes,people,human','bicycle','car','moto
 BACKGROUND_CATEGORY_COCO = ['ground','land','grass','tree','building','wall','sky','lake','water','river','sea','railway','railroad','helmet',
                         'cloud','house','mountain','ocean','road','rock','street','valley','bridge',
                         ]
+
+# 陆地
+BACKGROUND_Terrestrial = ['ground','land','grass','tree','mountain','rock','valley','earth','terrain','forest','bush','hill','field','pasture',
+                          'meadow','plateau','cliff','canyon','ridge','peak','plain','prairie','tundra','savanna','steppe','crag','knoll','dune',
+                          'glen','dale','copse','thicket']
+# 水生、大气
+BACKGROUND_Aquatic_Atmospheric = ['sea','ocean','lake','water','river','sky','cloud','pond','stream','lagoon','bay','gulf','fjord','estuary',
+                                  'creek','brook','reservoir','pool','spring','marsh','swamp','wetland','glacier','iceberg','atmosphere',
+                                  'stratosphere','mist','fog','rain','drizzle','hail','sleet','snow','thunderstorm','breeze','wind','gust',
+                                  'hurricane','tornado','monsoon','cumulus','cirrus','stratus','nimbus']
+# 人造物
+BACKGROUND_Man_Made = ['building','house','wall','road','street','railway','railroad','bridge','edifice','structure','apartment','condominium',
+                       'skyscraper','highway','boulevard','lane','alley','byway','avenue','expressway','freeway','path','overpass','underpass',
+                       'viaduct','tunnel','footbridge','crosswalk','culvert','dam','archway','causeway','plaza','square','station','terminal']

@@ -9,7 +9,7 @@ model, preprocess = clip.load("ViT-L/14", device=device, download_root="resource
 
 def get_similarity_matrix(images, texts):
     # 预处理图像和文本
-    image_inputs = torch.stack([preprocess(Image.open(img)).to(device) for img in images])
+    image_inputs = torch.stack([preprocess(img).to(device) for img in images])
     text_inputs = clip.tokenize([txt for txt in texts]).to(device)
 
     # 计算图像和文本特征
@@ -22,31 +22,28 @@ def get_similarity_matrix(images, texts):
     return similarity_matrix
 
 
-def filter_queries(similarity_matrix, threshold=0.3):
+def mask_classifier(visual_prompt_list, label_list, theta=0.3):
+    similarity_matrix = get_similarity_matrix(visual_prompt_list, label_list)
     # 沿文本维度应用 softmax（按列进行softmax）
     softmax_sim_matrix = similarity_matrix.softmax(dim=0)
-
     # 提取对角线元素作为匹配分数
     matching_scores = torch.diag(softmax_sim_matrix)
-
-    # 应用阈值进行过滤
-    filtered_queries = []
+    print("matching_scores:")
+    print(matching_scores)
+    # 根据阈值进行文本筛选
+    new_label_list = []
     for i, score in enumerate(matching_scores):
-        if score >= threshold:
-            print(f"查询 {label_list[i]} 得分：{score}，保留")
-            filtered_queries.append((i, score.item()))  # (索引, 分数)
-        else:
-            print(f"查询 {label_list[i]} 得分：{score}，过滤")
-            filtered_queries.append((i, None))  # 标记为 NULL
-    return filtered_queries
+        if score >= theta:
+            new_label_list.append(label_list[i])
+    return new_label_list
+
 
 if __name__ == '__main__':
     images = []
     image_name = "test1"
-    label_list = ['face', 'human', 'people', 'person with clothes', 'phone']
+    label_list = ['person with clothes,people,human', 'cell phone', 'face', 'building', 'dog']
     for label in label_list:
         image = f"resources/output/visual_prompt/{image_name}/{label}.png"
         images.append(image)
 
     similarity_matrix = get_similarity_matrix(images, label_list)
-    filtered_queries = filter_queries(similarity_matrix, threshold=0.3)

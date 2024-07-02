@@ -2,21 +2,21 @@ import cv2
 import numpy as np
 
 
-def blur_background(image_path, cam_path, threshold, output_path):
+def blur_background(image_path, cam_dic, threshold, output_path, save=False):
     """
     对图像背景进行模糊处理
 
     :param image_path: 原始图像路径
-    :param cam_path: CAM字典路径
+    :param cam_dic: CAM字典
     :param threshold: CAM二值化阈值
     :param output_path: 保存结果的路径
+    :param save: 是否保存文件
     """
     # 读取图像
     image = cv2.imread(image_path, cv2.IMREAD_COLOR).astype(np.float32)
 
     # 读取CAM
-    cam_dict = np.load(cam_path, allow_pickle=True).item()
-    cam = cam_dict['attn_highres']
+    cam = cam_dic['attn_highres']
     cam = cam.squeeze()
 
     # 二值化CAM
@@ -36,8 +36,10 @@ def blur_background(image_path, cam_path, threshold, output_path):
     result = np.where(mask == 1, image_rgb, blurred_image)
 
     # 保存结果
-    result_bgr = cv2.cvtColor(result.astype(np.uint8), cv2.COLOR_RGB2BGR)
-    cv2.imwrite(output_path, result_bgr)
+    visual_prompt = cv2.cvtColor(result.astype(np.uint8), cv2.COLOR_RGB2BGR)
+    if save:
+        cv2.imwrite(output_path, visual_prompt)
+    return visual_prompt
 
     # 显示结果
     # cv2.imshow('Blurred Background', result_bgr)

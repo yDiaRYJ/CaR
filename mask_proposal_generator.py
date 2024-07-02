@@ -1,5 +1,4 @@
 from generate_cam import generate_cam, zeroshot_classifier, reshape_transform, image_preprocess
-from post_process import crf
 from generate_heatmap import generate_heatmap
 from visual_prompting import blur_background
 from clip_es.pytorch_grad_cam import GradCAM
@@ -38,7 +37,6 @@ def mask_proposal_generator(model, cam, bg_text_features, image_path, label_list
         heatmap_save_path = f"{heatmap_save_dir}/{label}.png"
         visual_prompt_save_path = f"{visual_prompt_save_dir}/{label}.png"
         # process
-        # pseudo_mask = crf(image_path=image_path, cam_dic=cam_dic, pseudo_mask_save_path=pseudo_mask_save_path, save=save)
         heatmap = generate_heatmap(image_path=image_path, cam_dic=cam_dic,heatmap_save_path=heatmap_save_path, save=save)
         visual_prompt = blur_background(image_path=image_path, cam_dic=cam_dic, threshold=eta, output_path=visual_prompt_save_path, save=save)
         visual_prompt_list.append(visual_prompt)

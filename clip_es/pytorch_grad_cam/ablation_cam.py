@@ -4,7 +4,7 @@ import tqdm
 from typing import Callable, List
 from clip_es.pytorch_grad_cam.base_cam import BaseCAM
 from clip_es.pytorch_grad_cam.utils.find_layers import replace_layer_recursive
-from clip_es.pytorch_grad_cam.ablation_layer import AblationLayer
+from clip_es.pytorch_grad_cam import AblationLayer
 
 
 """ Implementation of AblationCAM

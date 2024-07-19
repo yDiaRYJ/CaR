@@ -179,9 +179,8 @@ def generate_cam(image_info, cam_out_dir, model, label_list, bg_text_features, c
     fg_text_features = zeroshot_classifier(label_list, ['a clean origami {}.'], model)  # 获取前景文本特征
     fg_text_features = fg_text_features.to(device)  # 将前景文本特征移动到对应设备上
 
-
-
     text_features = torch.cat([fg_text_features, bg_text_features], dim=0).to(device)  # 合并前景和背景特征
+    # text_features = fg_text_features
     input_tensor = [image_features, text_features, h, w]  # 构建输入张量
 
     # 保存所有标签对应的cam
@@ -196,6 +195,7 @@ def generate_cam(image_info, cam_out_dir, model, label_list, bg_text_features, c
         # 设置当前目标
         targets = [ClipOutputTarget(label_list.index(label))]
         # 生成CAM
+        # torch.cuda.empty_cache()
         grayscale_cam, logits_per_image, attn_weight_last = cam(input_tensor=input_tensor,
                                                                 targets=targets,
                                                                 target_size=None)

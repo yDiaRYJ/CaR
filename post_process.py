@@ -113,7 +113,8 @@ def scores(label_trues, label_preds, n_class):
     }
 
 
-def crf(image_path, cam_dic, pseudo_mask_save_path='', save=False):
+
+def crf_coco14(image_path, cam_dic, pseudo_mask_save_path='', save=False):
     """
     对生成的cam进行CRF后处理，并生成分割图
 
@@ -123,7 +124,7 @@ def crf(image_path, cam_dic, pseudo_mask_save_path='', save=False):
     :param save: 是否保存掩码文件
     """
     # 配置
-    torch.set_grad_enabled(False)
+    # torch.set_grad_enabled(False)
 
     # CRF后处理器
     postprocessor = DenseCRF(
@@ -149,6 +150,91 @@ def crf(image_path, cam_dic, pseudo_mask_save_path='', save=False):
     prob = postprocessor(image, prob)  # 执行CRF后处理
 
     label = np.argmax(prob, axis=0)  # 预测标签
+    confidence = np.max(prob, axis=0)
+    pseudo_mask = label.astype(np.uint8)
+    if save:
+        cv2.imwrite(pseudo_mask_save_path, pseudo_mask)  # 保存伪标签
+    return pseudo_mask, confidence
+
+
+def post_process_coco14(image_path, cam_dics, label_list, pseudo_mask_save_path='', save=False):
+    mask_list = []
+    confidence_list = []
+    from clip_text import new_class_names_coco
+    for cam_dic, label in zip(cam_dics, label_list):
+        label_idx = new_class_names_coco.index(label) + 1
+        mask, confidence = crf_coco14(image_path, cam_dic, save=save)
+        mask[mask == 1] = label_idx
+        mask_list.append(mask)
+        confidence_list.append(confidence)
+
+    # 创建一个空的目标数组
+    final_mask = np.zeros_like(mask_list[0])
+
+    # 创建一个空的 target_confidence 数组
+    target_confidence = np.zeros_like(mask_list[0], dtype=np.float32)
+
+    # 遍历 mask_list,将非零元素填入目标数组
+    for i, mask in enumerate(mask_list):
+        final_mask[mask != 0] = mask[mask != 0]
+        target_confidence[mask != 0] = confidence_list[i][mask != 0]
+
+    # 遍历 target_array,如果当前位置不为 0,则比较 target_confidence 和 mask 对应位置的 confidence
+    for i in range(final_mask.shape[0]):
+        for j in range(final_mask.shape[1]):
+            if final_mask[i, j] != 0:
+                for k, mask in enumerate(mask_list):
+                    if mask[i, j] != 0:
+                        if confidence_list[k][i, j] > target_confidence[i, j]:
+                            final_mask[i, j] = mask[i, j]
+                            target_confidence[i, j] = confidence_list[k][i, j]
+
+    # target_array[target_confidence < 0.95] = 255  # 低置信度区域设为255
+
+    return final_mask
+
+
+def crf(image_path, cam_dic, pseudo_mask_save_path='', save=False):
+    """
+    对生成的cam进行CRF后处理，并生成分割图
+
+    :param image_path: 图片路径
+    :param cam_dic: cam字典
+    :param pseudo_mask_save_path: 掩码保存文件路径
+    :param save: 是否保存掩码文件
+    """
+    # 配置
+    # torch.set_grad_enabled(False)
+
+    # CRF后处理器
+    postprocessor = DenseCRF(
+        iter_max=10,
+        pos_xy_std=1,
+        pos_w=3,
+        bi_xy_std=67,
+        bi_rgb_std=3,
+        bi_w=4,
+    )
+
+    # process
+    image = cv2.imread(image_path, cv2.IMREAD_COLOR).astype(np.float32)  # 读取图像
+    image -= mean_bgr  # 均值减法
+    image = image.transpose(2, 0, 1)  # HWC -> CHW
+
+    cams = cam_dic['attn_highres']
+    bg_score = np.power(1 - np.max(cams, axis=0, keepdims=True), 1)  # 计算背景分数
+    cams = np.concatenate((bg_score, cams), axis=0)
+    prob = cams
+
+    image = image.astype(np.uint8).transpose(1, 2, 0)  # 转换图像格式
+    prob = postprocessor(image, prob)  # 执行CRF后处理
+
+    keys = [0, 56, 58, 60, 62, 68, 72, 73, 74, 75]
+    keys = torch.tensor(keys)
+    keys = np.pad(keys + 1, (1, 0), mode='constant')
+
+    label = np.argmax(prob, axis=0)  # 预测标签
+    label = keys[label]
     confidence = np.max(prob, axis=0)
     label[confidence < 0.95] = 255  # 低置信度区域设为255
     pseudo_mask = label.astype(np.uint8)

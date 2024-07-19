@@ -1,4 +1,3 @@
-
 BACKGROUND_CATEGORY = ['ground','land','grass','tree','building','wall','sky','lake','water','river','sea','railway','railroad','keyboard','helmet',
                         'cloud','house','mountain','ocean','road','rock','street','valley','bridge','sign',
                         ]

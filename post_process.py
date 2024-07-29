@@ -1,3 +1,5 @@
+import json
+
 import torch
 import os
 import numpy as np
@@ -10,6 +12,7 @@ import cv2
 from PIL import Image
 import argparse
 from generate_heatmap import generate_heatmap
+from pycocotools import mask as mask_utils
 
 mean_bgr = (104.008, 116.669, 122.675)
 
@@ -257,6 +260,44 @@ def post_process(image_path, cam_dics, pseudo_mask_save_path='', save=False):
     final_heatmap = generate_heatmap(image_path=image_path, cam_dic=final_cam_dic, save=save)
     final_mask = crf(image_path=image_path, cam_dic=final_cam_dic, save=save)
     return final_heatmap, final_mask
+
+
+def binary_mask_to_rle(binary_mask):
+    """
+    将二值分割掩码转换为rle格式。
+    """
+    # contours, _ = cv2.findContours(binary_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    # segmentation = []
+    # for contour in contours:
+    #     if contour.size >= 6:  # 至少需要3个点来表示一个多边形
+    #         segmentation.append(contour.flatten().tolist())
+    # return segmentation
+    rle = mask_utils.encode(np.asfortranarray(binary_mask))
+    rle['counts'] = rle['counts'].decode('utf-8')  # RLE编码结果是字节，需要解码为字符串
+    return rle
+
+
+def post_process_lvis(image_path, label_list, cam_dics, pseudo_mask_save_path='', save=False):
+    results = []
+    from lvis_text import class_names_lvis
+    for label, cam_dic in zip(label_list, cam_dics):
+        mask = crf(image_path=image_path, cam_dic=cam_dic, save=save)
+        mask[mask == 255] = 1
+        rle = binary_mask_to_rle(mask)
+        image_id = os.path.basename(image_path).split(".")[0]
+        category_id = class_names_lvis.index(label) + 1
+        result = {
+            "image_id": int(image_id),
+            "category_id": category_id,
+            "segmentation": rle,
+            "area": mask_utils.area(rle).item(),
+            "bbox": mask_utils.toBbox(rle).tolist(),
+            "score": 1.0
+        }
+        results.append(result)
+
+    return results
+
 
 if __name__ == "__main__":
     pseudo_mask_save_path = "resources/output/pseudo_mask"

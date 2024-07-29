@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 from PIL import Image
-
+from lvis import LVIS, LVISEval, LVISResults
 
 def _fast_hist(label_true, label_pred, n_class):
     # 创建一个布尔掩码,过滤掉无效的标签
@@ -77,9 +77,27 @@ def eval(label_predict_dir, label_true_dir, n_class):
     score = scores(label_trues, label_predicts, n_class)
     return score
 
+
+def eval_lvis():
+    ANNOTATION_PATH = "resources/input/lvis/lvis_v1_val.json"
+    RESULT_PATH = "resources/output/lvis/results.json"
+
+    ANN_TYPE = 'segm'
+
+    lvis_eval = LVISEval(ANNOTATION_PATH, RESULT_PATH, ANN_TYPE)
+    lvis_eval.run()
+    lvis_eval.print_results()
+
+    # # 加载LVIS注释文件
+    # lvis_gt = LVIS('resources/input/lvis/lvis_v1_val.json')
+    # # 加载预测结果文件
+    # lvis_dt = LVISResults(lvis_gt, 'resources/output/lvis/results_1.json')
+    # # 初始化评估工具
+    # lvis_eval = LVISEval(lvis_gt, lvis_dt, 'segm')
+    # # 运行评估
+    # lvis_eval.run()
+    # # 打印评估结果
+    # lvis_eval.print_results()
+
 if __name__ == '__main__':
-    label_predict_dir = "D:\et\program\code\python\zju\dataset\coco2014\MyResult1\mask"
-    label_true_dir = "D:\et\program\code\python\zju\dataset\coco2014\SegmentationClass"
-    is_coco = True
-    n_class = 21 if not is_coco else 81
-    print(eval(label_predict_dir, label_true_dir, n_class))
+    eval_lvis()

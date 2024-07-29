@@ -1,3 +1,4 @@
+import json
 import os
 
 from generate_cam import generate_cam, zeroshot_classifier, reshape_transform, image_preprocess
@@ -5,6 +6,7 @@ from mask_proposal_generator import mask_proposal_generator
 from mask_classifier import mask_classifier
 from post_process import post_process
 from clip_es.pytorch_grad_cam import GradCAM
+from pre_process import pre_process_text
 import torch
 from clip_es import clip
 from clip_text import BACKGROUND_CATEGORY_COCO
@@ -173,13 +175,14 @@ def main_test():
     # 输出路径
     output_path = "resources/output"
     # 图片路径
-    image_path = 'resources/input/image/COCO_val2014_000000000139.jpg'
+    image_path = 'resources/input/image/COCO_val2014_000000000074.jpg'
     # 定义标签
-    from clip_text import new_class_names_coco
-
-    text_query = [new_class_names_coco[i] for i in [0, 56, 58, 60, 62, 68, 72, 73, 74, 75]]
+    # from clip_text import new_class_names_coco
+    # text_query = new_class_names_coco
+    from lvis_text import class_names_lvis
+    text_query = pre_process_text(image_path=image_path, texts=class_names_lvis, topk=100)
     background_query = []
-    predict_coco14(image_path=image_path, output_path=output_path, text_query=text_query, background_query=background_query, eta=eta, theta=theta, save=False)
+    predict(image_path=image_path, output_path=output_path, text_query=text_query, background_query=background_query, eta=eta, theta=theta, save=False)
 
 def main_coco14():
     dataset_dir = "D:\et\program\code\python\zju\dataset\coco2014"
@@ -187,5 +190,84 @@ def main_coco14():
     split_file = "eval_resources/coco14/val.txt"
     run_coco14(dataset_dir, output_path, split_file, test_num=-1, start=2432)
 
+
+def predict_lvis(image_path, output_path, label_list, eta, theta):
+    new_label_list = label_list
+    iterator = 0  # 迭代次数
+    cam_dic_list = []
+    while len(new_label_list) > 0:
+        iterator += 1
+        print(f"第{iterator}次迭代：")
+        print(new_label_list)
+        # mask proposal
+        cam_dic_list, visual_prompt_list = mask_proposal_generator(model=model, cam=cam,
+                                                                   bg_text_features=bg_text_features,
+                                                                   image_path=image_path, label_list=label_list,
+                                                                   output_path=output_path, eta=eta, save=False)
+        visual_prompt_list = numpy2pil(visual_prompt_list)
+        # mask classifier
+        new_label_list = mask_classifier(visual_prompt_list=visual_prompt_list, label_list=label_list, theta=theta)
+        if len(label_list) == len(new_label_list):
+            break
+        label_list = new_label_list
+        print()
+    # post process
+    from post_process import post_process_lvis
+    results = post_process_lvis(image_path=image_path, label_list=label_list, cam_dics=cam_dic_list)
+    return results
+
+
+def run_lvis(test_num=-1, start=0):
+    # 参数设置
+    eta = 0.5
+    theta = 0.3
+    dataset_dir = 'D:\et\program\code\python\zju\dataset\lvis\lvis_val'
+    output_path = "resources/output/lvis/results.json"
+    from lvis_text import class_names_lvis
+    # 获取文件信息
+    file_list = os.listdir(dataset_dir)
+    # 图片总数
+    total_num = len(file_list)
+    if test_num != -1:
+        total_num = test_num
+    read_num = 0
+    # 保存结果
+    results = []
+    # 遍历每个图片
+    for image in file_list:
+        # 当前读取到第几张图片
+        read_num += 1
+        if read_num < start:
+            continue
+        # 输出提示信息
+        print("-" * 100)
+        print(f"processing:{read_num}/{total_num}")
+        image_path = os.path.join(dataset_dir, image)
+        text_query = pre_process_text(image_path=image_path, texts=class_names_lvis, topk=100)
+        results = results + predict_lvis(image_path=image_path, output_path=output_path, label_list=text_query, eta=eta,
+                               theta=theta)
+        # 每隔10次保存1次结果，防止爆内存
+        if read_num % 10 == 0:
+            output_path = f"resources/output/lvis/results_{read_num}.json"
+            with open(output_path, "w") as f:
+                json.dump(results, f)
+            results.clear()
+
+
+def main_lvis():
+    # 参数设置
+    eta = 0.5
+    theta = 0.3
+    # 输入输出设置
+    # 输出路径
+    output_path = "resources/output/lvis/results.json"
+    # 图片路径
+    image_path = 'resources/input/image/000000000139.jpg'
+    # 定义标签
+    from lvis_text import class_names_lvis
+    text_query = pre_process_text(image_path=image_path, texts=class_names_lvis, topk=100)
+    results = predict_lvis(image_path=image_path, output_path=output_path, label_list=text_query, eta=eta, theta=theta)
+
+
 if __name__ == '__main__':
-    main_coco14()
+    run_lvis(start=471)
